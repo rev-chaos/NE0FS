@@ -1,6 +1,6 @@
 # NE0FS
 
-free storage on neo network inspired by the flood attack.
+**free** storage service on neo network inspired by the flood attack.
 
 # Usage
 
@@ -20,6 +20,4 @@ get the printed `<headerhash>` which can be used to download
 
 # TODO
 
-- multi-threading upload / download
-
-- use p2p message instead of rpc
+see more on [issues](https://github.com/vang1ong7ang/NE0FS/issues)
