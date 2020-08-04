@@ -2,33 +2,74 @@ package main
 
 import (
 	"log"
+	"sync"
 )
 
 type upload struct {
-	payloads []payload
+	payloads chan payload
 }
 
 func (t *upload) run(data []byte) []byte {
 	log.Printf("start uploading ...")
 	log.Printf("data size: %d bytes", len(data))
+
+	t.payloads = make(chan payload, len(data)/940+0xf)
 	ret := t.iter(data)
+	close(t.payloads)
+
 	log.Printf("packets built: %d packets", len(t.payloads))
-	for i, v := range t.payloads {
-		for {
-			log.Printf("sending packet %d/%d ...", i+1, len(t.payloads))
-			err := v.put()
-			if err == nil {
-				break
+
+	var wg sync.WaitGroup
+	wg.Add(threads)
+	defer wg.Wait()
+
+	for i := 0; i < threads; i++ {
+		go func() {
+			defer wg.Done()
+			for v := range t.payloads {
+				for {
+					log.Printf("packet left %d ...", len(t.payloads))
+					ret := func() error {
+						channel := make(chan error, ntry)
+						for i := 0; i < ntry; i++ {
+							go func() {
+								defer func() {
+									recover()
+								}()
+								channel <- v.put()
+							}()
+						}
+
+						defer func() {
+							close(channel)
+						}()
+
+						for i := 0; i < ntry; i++ {
+							err := <-channel
+							if err == nil {
+								return nil
+							}
+						}
+						return errRPC{}
+					}()
+					if ret == nil {
+						break
+					}
+				}
 			}
-			log.Printf("sending packet %d/%d error: %s", i+1, len(t.payloads), err.Error())
-		}
+		}()
 	}
+
 	return ret[:]
 }
 
 func (t *upload) iter(data []byte) [32]byte {
 	p := create()
-	p.setData(data[:940])
+	size := len(data)
+	if size > 940 {
+		size = 940
+	}
+	p.setData(data[:size])
 	if len(data) > 940 {
 		extra := data[940:]
 
@@ -48,6 +89,6 @@ func (t *upload) iter(data []byte) [32]byte {
 			p.setNR(nr)
 		}
 	}
-	t.payloads = append(t.payloads, p)
+	t.payloads <- p
 	return p.hash()
 }

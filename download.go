@@ -53,20 +53,49 @@ func (t *download) start() {
 	for i := 0; i < threads; i++ {
 		go func() {
 			for data := range t.hashes {
-				p := create()
-				err := p.get(data)
-				if err != nil {
-					t.sendHash(data)
-				} else {
-					t.sendPayloads(p)
-					nl := p.getNL()
-					nr := p.getNR()
-					if nl != hashzero {
-						t.sendHash(nl)
+				for {
+					err := func() error {
+						channel := make(chan payload, ntry)
+						for i := 0; i < ntry; i++ {
+							go func() {
+								defer func() {
+									recover()
+								}()
+								p := create()
+								p.get(data)
+								channel <- p
+							}()
+						}
+
+						defer func() {
+							close(channel)
+						}()
+
+						for i := 0; i < ntry; i++ {
+							p := <-channel
+							bin := p.getData()
+							if len(bin) == 0 {
+								continue
+							}
+
+							t.sendPayloads(p)
+							nl := p.getNL()
+							nr := p.getNR()
+							if nl != hashzero {
+								t.sendHash(nl)
+							}
+							if nr != hashzero {
+								t.sendHash(nr)
+							}
+							return nil
+						}
+
+						return errRPC{}
+					}()
+					if err == nil {
+						break
 					}
-					if nr != hashzero {
-						t.sendHash(nr)
-					}
+
 				}
 				t.wgHash.Done()
 			}
