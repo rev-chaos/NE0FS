@@ -91,38 +91,61 @@ func (t *payload) put() error {
 }
 
 func (t *payload) get(data [32]byte) error {
-	values := url.Values{
-		"jsonrpc": []string{"2.0"},
-		"method":  []string{"getrawtransaction"},
-		"params":  []string{"[\"" + hex.EncodeToString(data[:]) + "\"]"},
-		"id":      []string{"1"},
-	}
-	addr := url.URL{
-		Scheme:   "http",
-		Host:     nodes[rand.Intn(len(nodes))],
-		RawQuery: values.Encode(),
-	}
-	resp, err := http.Get(addr.String())
-	if err != nil {
-		return err
+	channel := make(chan []byte, ntry)
+	for i := 0; i < ntry; i++ {
+		go func() {
+			defer func() {
+				recover()
+			}()
+
+			values := url.Values{
+				"jsonrpc": []string{"2.0"},
+				"method":  []string{"getrawtransaction"},
+				"params":  []string{"[\"" + hex.EncodeToString(data[:]) + "\"]"},
+				"id":      []string{"1"},
+			}
+			addr := url.URL{
+				Scheme:   "http",
+				Host:     nodes[rand.Intn(len(nodes))],
+				RawQuery: values.Encode(),
+			}
+			resp, err := http.Get(addr.String())
+			if err != nil {
+				channel <- nil
+			}
+
+			defer resp.Body.Close()
+
+			decoder := json.NewDecoder(resp.Body)
+			var ret struct {
+				Result string `json:"result"`
+			}
+			decoder.Decode(&ret)
+			bin, err := hex.DecodeString(ret.Result)
+			if err != nil {
+				channel <- nil
+			}
+			if len(bin) != 1024 {
+				channel <- nil
+			}
+			channel <- bin
+		}()
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		close(channel)
+	}()
 
-	decoder := json.NewDecoder(resp.Body)
-	var ret struct {
-		Result string `json:"result"`
+	for i := 0; i < ntry; i++ {
+		data := <-channel
+		if data == nil {
+			continue
+		}
+		copy(t[:], data)
+		return nil
 	}
-	decoder.Decode(&ret)
-	bin, err := hex.DecodeString(ret.Result)
-	if err != nil {
-		return err
-	}
-	if len(bin) != 1024 {
-		return errRPC{}
-	}
-	copy(t[:], bin[:])
-	return nil
+
+	return errRPC{}
 }
 
 func create() payload {

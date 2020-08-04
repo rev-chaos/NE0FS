@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"io"
 	"io/ioutil"
@@ -40,18 +41,43 @@ func main() {
 		if err != nil {
 			log.Fatalln(err, n)
 		}
+	case "detectnode":
+		exec := detectnode{}
+		w := writer()
+		defer w.Close()
+		ret := exec.run(nil)
+		n, err := w.Write(ret)
+		if err != nil {
+			log.Fatalln(err, n)
+		}
 	default:
 		log.Fatalln("unsupported command:", cmd)
 	}
 }
 
 func init() {
-	flag.StringVar(&cmd, "c", "download", "upload / download")
+	flag.StringVar(&cmd, "c", "download", "upload / download / detectnode")
 	flag.StringVar(&filename, "f", "-", "filename, `-` for stdin / stdout")
 	flag.StringVar(&hash, "s", "", "hash")
 
 	flag.IntVar(&threads, "threads", 16, "thread num")
+	flag.StringVar(&nodelist, "nodelist", "", "node list")
+	flag.Int64Var(&latency, "latency", 1000, "latency in ms")
+	flag.IntVar(&ntry, "ntry", 2, "ntry")
 	flag.Parse()
+
+	if nodelist == "" {
+		return
+	}
+
+	file, err := os.Open("NE0FS.nodes.json")
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	defer file.Close()
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&nodes)
 }
 
 func reader() io.ReadCloser {
@@ -81,5 +107,8 @@ var (
 	filename string
 	hash     string
 
-	threads int
+	threads  int
+	nodelist string
+	latency  int64
+	ntry     int
 )
