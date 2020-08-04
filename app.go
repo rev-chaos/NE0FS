@@ -49,6 +49,8 @@ func init() {
 	flag.StringVar(&cmd, "c", "download", "upload / download")
 	flag.StringVar(&filename, "f", "-", "filename, `-` for stdin / stdout")
 	flag.StringVar(&hash, "s", "", "hash")
+
+	flag.IntVar(&threads, "threads", 16, "thread num")
 	flag.Parse()
 }
 
@@ -78,4 +80,6 @@ var (
 	cmd      string
 	filename string
 	hash     string
+
+	threads int
 )

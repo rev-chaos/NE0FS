@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"math/rand"
 	"net/http"
 	"net/url"
 )
@@ -98,7 +99,7 @@ func (t *payload) get(data [32]byte) error {
 	}
 	addr := url.URL{
 		Scheme:   "http",
-		Host:     "seed2.ngd.network:10332",
+		Host:     nodes[rand.Intn(len(nodes))],
 		RawQuery: values.Encode(),
 	}
 	resp, err := http.Get(addr.String())
